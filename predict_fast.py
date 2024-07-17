@@ -145,12 +145,12 @@ def trans_output(str1):
 def predict_fast(data_dir, group_info='default'):
     device = torch.device("cuda:0")
 
-    #
-
     if group_info == 'no_group_info':
-        model = torch.load("../data/mdl/USPNet_fast_no_group_info.pth", map_location=device)
+        model = torch.load("data/uspnet/USPNet_fast_no_group_info.pth", map_location=device)
     else:
-        model = torch.load("../data/mdl/USPNet_fast.pth", map_location=device)
+        # model = torch.load("../data/uspnet/USPNet_fast.pth", map_location=device)
+        # use the SEC/SPI optimised code
+        model = torch.load("data/uspnet/USPNet_fast_sec_spi.pth", map_location=device)
 
     if isinstance(model, torch.nn.DataParallel):
         # access the model inside the DataParallel wrapper
