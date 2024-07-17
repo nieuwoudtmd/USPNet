@@ -139,16 +139,15 @@ def trans_output(str1):
     else:
         print(str1)
         raise Exception('Unknown category!')
-
     return a
 
-if __name__ == '__main__':
-    device = torch.device("cuda:0")
-    # read file names if provided
-    if args.data_dir != 'data_processed':
-        data_dir = args.data_dir
 
-    if args.group_info == 'no_group_info':
+def predict_fast(data_dir, group_info='default'):
+    device = torch.device("cuda:0")
+
+    #
+
+    if group_info == 'no_group_info':
         model = torch.load("../data/mdl/USPNet_fast_no_group_info.pth", map_location=device)
     else:
         model = torch.load("../data/mdl/USPNet_fast.pth", map_location=device)
