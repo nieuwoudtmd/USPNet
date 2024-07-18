@@ -7,12 +7,16 @@ import numpy as np
 import argparse
 from utils_tools.utils import *
 import esm
+import logging
 
 data_dir = 'data_processed'
 # Set up argument parser
 parser = argparse.ArgumentParser(description='Predict')
 parser.add_argument('--data_dir', nargs='?', default='data_processed', help='data directory')
 parser.add_argument('--group_info', nargs='?', default='default', help='group information provided or not')
+
+# Initialize the logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 # Parse arguments
@@ -47,7 +51,7 @@ def trans_data_esm(str_array):
 
     return result
 
-def trans_data_esm_in_batches(str_array, split=1, path="./test_data/embedding/test_feature_esm.npy"):
+def trans_data_esm_in_batches(str_array, split=10, path="./test_data/embedding/test_feature_esm.npy"):
     if(os.path.exists(path)):
         embedding_result = np.load(path)
         print("feature shape:")
@@ -143,99 +147,102 @@ def trans_output(str1):
 
 
 def predict_fast(data_dir, group_info='default'):
+    logging.info("Starting predict_fast function.")
+
     device = torch.device("cuda:0")
+    logging.info(f"Using device: {device}")
 
     if group_info == 'no_group_info':
-        model = torch.load("data/uspnet/USPNet_fast_no_group_info.pth", map_location=device)
+        model_path = "data/uspnet/USPNet_fast_no_group_info.pth"
     else:
-        # model = torch.load("../data/uspnet/USPNet_fast.pth", map_location=device)
-        # use the SEC/SPI optimised code
-        model = torch.load("data/uspnet/USPNet_fast_sec_spi.pth", map_location=device)
+        model_path = "data/uspnet/USPNet_fast_sec_spi.pth"
+
+    logging.info(f"Loading model from {model_path}")
+    model = torch.load(model_path, map_location=device)
 
     if isinstance(model, torch.nn.DataParallel):
-        # access the model inside the DataParallel wrapper
+        logging.debug("Model is wrapped in DataParallel, accessing the underlying model.")
         model = model.module
     model = model.to(device)
     model.eval()
 
-    filename_list = ["data_list.txt",
-                     "kingdom_list.txt",
-                     "test_feature_esm.npy",
-                     ]
+    filename_list = ["data_list.txt", "kingdom_list.txt", "test_feature_esm.npy"]
+    filename_list = [os.path.join(data_dir, filename) for filename in filename_list]
 
-    for i in range(len(filename_list)):
-        filename_list[i] = os.path.join(data_dir, filename_list[i])
+    logging.info(f"Creating test data from: {filename_list}")
+    X_test = createTestData(data_path=filename_list[0], kingdom_path=filename_list[1], test_path=filename_list[2])
 
-    X_test = createTestData(data_path=filename_list[0],
-                            kingdom_path=filename_list[1],
-                            test_path=filename_list[2])
+    X_test = torch.tensor(X_test)
+    test_loader = torch.utils.data.DataLoader(X_test, batch_size=256)
+
     output = []
     output_aa = []
     aux_test = []
 
-    X_test = torch.tensor(X_test)
-    test_loader = torch.utils.data.DataLoader(X_test, batch_size=256)
+    logging.info("Starting prediction loop.")
     for i, input in enumerate(test_loader):
+        logging.debug(f"Processing batch {i + 1}/{len(test_loader)}")
         input = input.cuda()
-        aux = input[:, 70:74]
-        aux = aux.cpu().detach().numpy()
+        aux = input[:, 70:74].cpu().detach().numpy()
         aux_test.extend(aux)
+
         o1, o_aa = model(input)
         output.extend(o1.cpu().detach().numpy())
         output_aa.extend(o_aa.cpu().detach().numpy())
+
     output = torch.tensor(np.array(output))
     results = pred(output).cpu().detach().numpy()
-    # For Eurkaryota:
+
     for i in range(len(aux_test)):
-        if (aux_test[i][0] == 1 and results[i] != 1 and results[i] != 0):
+        if aux_test[i][0] == 1 and results[i] not in (0, 1):
             results[i] = 0
 
     output_aa = torch.argmax(torch.tensor(np.array(output_aa)), dim=2).reshape(-1, 1)
-    results_aa = output_aa.cpu().detach().numpy()
-    output_aa_ = results_aa.reshape(-1, 70).copy()
+    results_aa = output_aa.cpu().detach().numpy().reshape(-1, 70).copy()
 
-    indexes_ = np.where(output_aa_ == 1)
-    output_aa_[indexes_] = 100
+    indexes_ = np.where(results_aa == 1)
+    results_aa[indexes_] = 100
 
-    indexes_1 = np.where(output_aa_ == 3)
-    indexes_2 = np.where(output_aa_ == 0)
+    indexes_1 = np.where(results_aa == 3)
+    indexes_2 = np.where(results_aa == 0)
+    results_aa[indexes_1] = 1
+    results_aa[indexes_2] = 1
 
-    output_aa_[indexes_1] = 1
-    output_aa_[indexes_2] = 1
+    indexes_0 = np.where(results_aa != 1)
+    results_aa[indexes_0] = 0
+    indexes_pos = np.where(results_aa == 1)
 
-    indexes_0 = np.where(output_aa_ != 1)
-    output_aa_[indexes_0] = 0
-    indexes_pos = np.where(output_aa_ == 1)
+    predicted_type = [trans_output(result) for result in results]
 
-    predicted_type = []
-    for result in results:
-        predicted_type.append(trans_output(result))
-
-    indexes1= indexes_pos[0].copy().tolist()
-    indexes2 = indexes_pos[1].copy().tolist()
-
+    indexes1 = indexes_pos[0].tolist()
+    indexes2 = indexes_pos[1].tolist()
 
     predicted_cleavage = []
     count = 0
     data_list = []
+
     with open(filename_list[0], 'r') as data_file:
         for line in data_file:
             data_list.append(line.strip('\n'))
-    data_file.close()
+
+    logging.info("Generating predicted cleavage sites.")
     for result in results:
-        if result==0:
+        if result == 0:
             predicted_cleavage.append('')
         else:
             try:
                 index = indexes1.index(count)
-            except:
+            except ValueError:
                 predicted_cleavage.append(data_list[count])
             else:
-                index = indexes1.index(count)
                 index2 = indexes2[index]
-                sq=data_list[count]
-                predicted_cleavage.append(sq[:index2+1])
-        count = count + 1
+                sq = data_list[count]
+                predicted_cleavage.append(sq[:index2 + 1])
+        count += 1
 
-    df = pd.DataFrame({'sequence': data_list, 'predicted_type': predicted_type, 'predicted_cleavage': predicted_cleavage})
-    df.to_csv(data_dir + '/results.csv', index=False)
+    df = pd.DataFrame(
+        {'sequence': data_list, 'predicted_type': predicted_type, 'predicted_cleavage': predicted_cleavage})
+    results_path = os.path.join(data_dir, 'results.csv')
+    df.to_csv(results_path, index=False)
+
+    logging.info(f"Results saved to {results_path}")
