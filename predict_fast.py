@@ -47,7 +47,7 @@ def trans_data_esm(str_array):
 
     return result
 
-def trans_data_esm_in_batches(str_array, split=20, path="./test_data/embedding/test_feature_esm.npy"):
+def trans_data_esm_in_batches(str_array, split=10, path="./test_data/embedding/test_feature_esm.npy"):
     if(os.path.exists(path)):
         embedding_result = np.load(path)
         print("feature shape:")
