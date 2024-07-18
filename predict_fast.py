@@ -152,10 +152,17 @@ def predict_fast(data_dir, group_info='default'):
     device = torch.device("cuda:0")
     logging.info(f"Using device: {device}")
 
-    if group_info == 'no_group_info':
-        model_path = "data/uspnet/USPNet_fast_no_group_info.pth"
+    # Define the base data path based on the environment
+    if "VCS_AUTHOR_EMAIL" in os.environ:
+        BASE_DATA_PATH = "/mnt/data"  # Path on the server
     else:
-        model_path = "data/uspnet/USPNet_fast_sec_spi.pth"
+        BASE_DATA_PATH = "data"  # Default local path
+
+    if group_info == 'no_group_info':
+        model_path = os.path.join(BASE_DATA_PATH, "uspnet/USPNet_fast_no_group_info.pth")
+    else:
+        model_path = os.path.join(BASE_DATA_PATH, "uspnet/USPNet_fast_sec_spi.pth")
+
 
     logging.info(f"Loading model from {model_path}")
     model = torch.load(model_path, map_location=device)
