@@ -51,7 +51,7 @@ def trans_data_esm(str_array):
 
     return result
 
-def trans_data_esm_in_batches(str_array, split=100, path="./test_data/embedding/test_feature_esm.npy"):
+def trans_data_esm_in_batches(str_array, split=10, path="./test_data/embedding/test_feature_esm.npy"):
     if(os.path.exists(path)):
         embedding_result = np.load(path)
         print("feature shape:")
@@ -101,8 +101,8 @@ def trans_label(str1):
 
 def createTestData(data_path='./test_data/data_list.txt',
                     kingdom_path='./test_data/kingdom_list.txt',
-                   maxlen=70, test_path="./embedding/test_feature_esm.npy"
-                   ):
+                   maxlen=70, test_path="./embedding/test_feature_esm.npy",
+                   group_info='default'):
     # Initialize
     data_list = []
     kingdom_list=[]
@@ -122,7 +122,7 @@ def createTestData(data_path='./test_data/data_list.txt',
 
     with open(kingdom_path, 'r') as kingdom_file:
         for line in kingdom_file:
-            if args.group_info == 'no_group_info':
+            if group_info == 'no_group_info':
                 kingdom_list.append([0, 0, 0, 0])
             else:
                 kingdom_list.append(np.eye(len(kingdom_dic.keys()))[kingdom_dic[line.strip('\n\t')]])
@@ -177,7 +177,7 @@ def predict_fast(data_dir, group_info='default'):
     filename_list = [os.path.join(data_dir, filename) for filename in filename_list]
 
     logging.info(f"Creating test data from: {filename_list}")
-    X_test = createTestData(data_path=filename_list[0], kingdom_path=filename_list[1], test_path=filename_list[2])
+    X_test = createTestData(data_path=filename_list[0], kingdom_path=filename_list[1], test_path=filename_list[2], group_info=group_info)
 
     X_test = torch.tensor(X_test)
     test_loader = torch.utils.data.DataLoader(X_test, batch_size=256)
