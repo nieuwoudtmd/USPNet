@@ -29,8 +29,14 @@ kingdom_dic = {'EUKARYA':0, 'ARCHAEA':1, 'POSITIVE':2, 'NEGATIVE': 3}
 #Load ESM1b model
 #esm_model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
 #Load ESM2 model
+# Load ESM2 model
 esm_model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-esm_model = (esm_model).cuda("cuda:0")
+
+if torch.cuda.is_available():
+    esm_model = (esm_model).cuda("cuda:0")
+else:
+    print("CUDA is not available. Running on CPU.")
+
 batch_converter = alphabet.get_batch_converter()
 def trans_data_esm(str_array):
 
